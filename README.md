@@ -197,6 +197,12 @@ npm install -g @angular/cli@18
 node --version  # ควรได้ v22.x.x หรือสูงกว่า
 ```
 
+### Issue 4: ไม่พบ node_modules
+**Solution**: รันคำสั่ง `npm install` ใน project directory เพื่อดาวน์โหลด dependencies
+```bash
+npm install
+```
+
 ## 🎓 สิ่งที่เรียนรู้ใน Step นี้
 
 1. **การสร้าง Angular project** พร้อม options ต่าง ๆ
