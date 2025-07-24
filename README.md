@@ -121,7 +121,6 @@ up-train-2025-angular-frontend-application/
 │   ├── styles.css
 │   └── main.ts
 ├── tailwind.config.js
-├── postcss.config.js
 ├── angular.json
 ├── package.json
 └── tsconfig.json
@@ -129,7 +128,7 @@ up-train-2025-angular-frontend-application/
 
 ## 🎨 Tailwind CSS เบื้องต้น
 
-### Colors ที่จะใช้ใน Todo App
+### Colors ที่สามารถใช้ใน Todo App
 
 ```css
 /* Primary Colors */
@@ -189,13 +188,13 @@ border border-gray-200
 ### Issue 2: Angular CLI ไม่พบ
 **Solution**: ติดตั้ง Angular CLI globally
 ```bash
-npm install -g @angular/cli
+npm install -g @angular/cli@18
 ```
 
 ### Issue 3: Node.js version ไม่รองรับ
 **Solution**: ใช้ Node.js version 18+ 
 ```bash
-node --version  # ควรได้ v18.x.x หรือสูงกว่า
+node --version  # ควรได้ v22.x.x หรือสูงกว่า
 ```
 
 ## 🎓 สิ่งที่เรียนรู้ใน Step นี้
