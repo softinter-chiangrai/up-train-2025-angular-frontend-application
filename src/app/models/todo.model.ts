@@ -1,5 +1,5 @@
 export interface Todo {
-  id: number;
+  id?: number;
   title: string;
   completed: boolean;
   createdAt: Date;
@@ -7,5 +7,10 @@ export interface Todo {
 
 export interface TodoFormData {
   title: string;
+}
+
+export interface UpdateTodoRequest {
+  title?: string;
+  completed?: boolean;
 }
 
