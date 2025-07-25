@@ -38,7 +38,7 @@ export const appConfig: ApplicationConfig = {
 mkdir src/app/services
 ```
 
-### 2. สร้างไฟล์ `src/app/services/todo.service.ts`
+### 2. แก้ไขไฟล์ `src/app/services/todo.service.ts`
 
 ```typescript
 import { Injectable, signal } from '@angular/core';
@@ -240,109 +240,12 @@ export class TodoService {
 }
 ```
 
-## 🧪 สร้าง JSON Server สำหรับทดสอบ
 
-### 1. ติดตั้ง JSON Server
-
-```bash
-npm install -g json-server
-```
-
-### 2. สร้างไฟล์ `db.json` ใน root directory
-
-```json
-{
-  "todos": [
-    {
-      "id": 1,
-      "title": "Learn Angular 18",
-      "completed": false,
-      "createdAt": "2024-01-01T10:00:00.000Z"
-    },
-    {
-      "id": 2,
-      "title": "Setup Tailwind CSS",
-      "completed": true,
-      "createdAt": "2024-01-01T11:00:00.000Z"
-    },
-    {
-      "id": 3,
-      "title": "Build Todo App",
-      "completed": false,
-      "createdAt": "2024-01-01T12:00:00.000Z"
-    }
-  ]
-}
-```
-
-### 3. เพิ่ม script ใน package.json
-
-```json
-{
-  "scripts": {
-    "api": "json-server --watch db.json --port 3000",
-    "dev": "ng serve",
-    "start:full": "concurrently \"npm run api\" \"npm run dev\""
-  }
-}
-```
-
-### 4. รัน JSON Server
+### 4. รัน Server
 
 ```bash
-# Terminal 1: รัน API server
-npm run api
-
-# Terminal 2: รัน Angular app
-npm run dev
-```
-
-## 🔍 ทดสอบ Service
-
-### 1. สร้างไฟล์ทดสอบ `src/app/services/todo.service.spec.ts`
-
-```typescript
-import { TestBed } from '@angular/core/testing';
-import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
-import { TodoService } from './todo.service';
-import { Todo } from '../models/todo.model';
-
-describe('TodoService', () => {
-  let service: TodoService;
-  let httpMock: HttpTestingController;
-
-  beforeEach(() => {
-    TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
-      providers: [TodoService]
-    });
-    service = TestBed.inject(TodoService);
-    httpMock = TestBed.inject(HttpTestingController);
-  });
-
-  afterEach(() => {
-    httpMock.verify();
-  });
-
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
-  it('should fetch todos', () => {
-    const mockTodos: Todo[] = [
-      { id: 1, title: 'Test Todo', completed: false, createdAt: new Date() }
-    ];
-
-    service.getTodos().subscribe(todos => {
-      expect(todos.length).toBe(1);
-      expect(todos[0].title).toBe('Test Todo');
-    });
-
-    const req = httpMock.expectOne('http://localhost:3000/todos');
-    expect(req.request.method).toBe('GET');
-    req.flush({ body: mockTodos }, { status: 200, statusText: 'OK' });
-  });
-});
+# Terminal: รัน Angular app
+npm run start
 ```
 
 ## 📖 เข้าใจ RxJS Operators
@@ -399,7 +302,12 @@ private handleError(error: any): Observable<never> {
 // ✅ ดี - จัดการ loading state
 getTodos(): Observable<Todo[]> {
   this._isLoading.set(true);  // เริ่ม loading
-  
+
+  return this.http.get<Todo[]>(...).pipe(
+    tap(() => this._isLoading.set(false)),  // หยุด loading เมื่อสำเร็จ
+    catchError(error => {
+      this._isLoading.set(false);  // หยุด loading เมื่อ error
+      return this.handleError(error);
   return this.http.get<Todo[]>(...).pipe(
     tap(() => this._isLoading.set(false)),  // หยุด loading เมื่อสำเร็จ
     catchError(error => {

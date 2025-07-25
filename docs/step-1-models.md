@@ -23,10 +23,11 @@ mkdir src/app/models
 ```typescript
 // Main Todo interface
 export interface Todo {
-  id?: number;                    // Optional เพราะ API จะสร้างให้
-  title: string;                  // ข้อความของ Todo
-  completed: boolean;             // สถานะเสร็จแล้วหรือยัง
-  createdAt: Date;               // วันที่สร้าง
+  id?: number;                // Optional เพราะ API จะสร้างให้
+  title: string;              // ข้อความของ Todo
+  completed: boolean;         // สถานะเสร็จแล้วหรือยัง
+  createdAt: Date;           // วันที่สร้าง
+  createdBy: string;          // ผู้สร้าง Todo
 }
 
 // Interface สำหรับ form data
@@ -34,28 +35,6 @@ export interface TodoFormData {
   title: string;
 }
 
-// Interface สำหรับ update request
-export interface UpdateTodoRequest {
-  title?: string;
-  completed?: boolean;
-}
-
-// Interface สำหรับ API response
-export interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  message?: string;
-}
-
-// Type สำหรับ filter todos
-export type TodoFilter = 'all' | 'pending' | 'completed';
-
-// Interface สำหรับ todo statistics
-export interface TodoStats {
-  total: number;
-  completed: number;
-  pending: number;
-}
 ```
 
 ## 🧩 เข้าใจ TypeScript Features
@@ -130,46 +109,6 @@ interface CreateTodoRequest {
 }
 ```
 
-## 🧪 ทดสอบ Models
-
-สร้างไฟล์ `src/app/models/todo.model.spec.ts` สำหรับทดสอบ:
-
-```typescript
-import { Todo, TodoFormData, TodoStats } from './todo.model';
-
-describe('Todo Models', () => {
-  it('should create Todo interface', () => {
-    const todo: Todo = {
-      id: 1,
-      title: 'Test Todo',
-      completed: false,
-      createdAt: new Date()
-    };
-
-    expect(todo.title).toBe('Test Todo');
-    expect(todo.completed).toBeFalse();
-  });
-
-  it('should create TodoFormData', () => {
-    const formData: TodoFormData = {
-      title: 'New Todo'
-    };
-
-    expect(formData.title).toBe('New Todo');
-  });
-
-  it('should create TodoStats', () => {
-    const stats: TodoStats = {
-      total: 5,
-      completed: 2,
-      pending: 3
-    };
-
-    expect(stats.total).toBe(5);
-    expect(stats.completed + stats.pending).toBe(stats.total);
-  });
-});
-```
 
 ## 📖 เรียนรู้เพิ่มเติม
 

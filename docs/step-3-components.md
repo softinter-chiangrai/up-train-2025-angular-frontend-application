@@ -41,85 +41,53 @@ mkdir src/app/components/todo-app
 
 ```typescript
 import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
-import { CommonModule, DatePipe } from '@angular/common';
-import { Subscription } from 'rxjs';
-
 import { Todo } from '../../models/todo.model';
+import { TodoFormComponent } from '../todo-form/todo-form.component';
+import { CommonModule, DatePipe } from '@angular/common';
 import { TodoService } from '../../services/todo.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-todo-app',
   standalone: true,
-  imports: [CommonModule, DatePipe],
+  imports: [CommonModule, DatePipe, TodoFormComponent],
   templateUrl: './todo-app.component.html',
   styleUrl: './todo-app.component.css'
 })
 export class TodoAppComponent implements OnInit, OnDestroy {
-  
-  // ============================================
-  // Dependency Injection
-  // ============================================
+
   private readonly todoService = inject(TodoService);
   private subscriptions = new Subscription();
 
-  // ============================================
-  // Signals - Private State
-  // ============================================
   private _todos = signal<Todo[]>([]);
   private _isLoading = signal<boolean>(false);
   private _error = signal<string | null>(null);
 
-  // ============================================
-  // Signals - Public Readonly
-  // ============================================
+  // Public readonly signals
   todos = this._todos.asReadonly();
   isLoading = this._isLoading.asReadonly();
   error = this._error.asReadonly();
 
-  // ============================================
   // Computed Signals
-  // ============================================
-  totalTodos = computed(() => this._todos().length);
-  
-  completedTodos = computed(() => 
-    this._todos().filter(todo => todo.completed).length
-  );
-  
-  pendingTodos = computed(() => 
-    this._todos().filter(todo => !todo.completed).length
-  );
+  readonly completedCount = signal(0);
+  readonly pendingCount = signal(0);
 
-  // Progress percentage
-  progressPercentage = computed(() => {
-    const total = this.totalTodos();
-    const completed = this.completedTodos();
-    return total > 0 ? Math.round((completed / total) * 100) : 0;
-  });
+  private _nextId = 4;
 
-  // Status text
-  statusText = computed(() => {
-    if (this.isLoading()) return 'Loading...';
-    if (this.error()) return 'Error occurred';
-    if (this.totalTodos() === 0) return 'No todos yet';
-    return `${this.completedTodos()}/${this.totalTodos()} completed`;
-  });
-
-  // ============================================
-  // Lifecycle Hooks
-  // ============================================
   ngOnInit(): void {
-    console.log('🚀 TodoAppComponent initialized');
     this.loadTodos();
+    // generate local storage
+    if (!localStorage.getItem('user')) {
+      // Generate a v4 UUID and store as 'user'
+      const uuid = crypto.randomUUID();
+      localStorage.setItem('user', uuid);
+    }
   }
 
   ngOnDestroy(): void {
-    console.log('🧹 TodoAppComponent destroyed');
     this.subscriptions.unsubscribe();
   }
 
-  // ============================================
-  // Data Loading
-  // ============================================
   loadTodos(): void {
     console.log('🔄 Loading todos from API...');
     
@@ -127,7 +95,9 @@ export class TodoAppComponent implements OnInit, OnDestroy {
     this._error.set(null);
     
     const subscription = this.todoService.getTodos().subscribe({
-      next: (todos) => {
+      next: (response) => {
+        // ถ้า response มีโครงสร้างพิเศษ ให้แปลงก่อน
+        const todos = response.body || response; // ขึ้นอยู่กับ API structure
         this._todos.set(todos);
         console.log('✅ Loaded', todos.length, 'todos');
       },
@@ -148,118 +118,122 @@ export class TodoAppComponent implements OnInit, OnDestroy {
     this.loadTodos();
   }
 
-  // ============================================
-  // Todo Actions
-  // ============================================
-  addTodo(title: string): void {
-    if (!title.trim()) {
-      console.warn('⚠️ Cannot add empty todo');
-      return;
-    }
+  // Computed Signals for Statistics
+  totalTodos = computed(() => this._todos().length);
+  completedTodos = computed(() =>
+    this._todos().filter(todo => todo.completed).length
+  );
+  pendingTodos = computed(() =>
+    this._todos().filter(todo => !todo.completed).length
+  );
 
-    console.log('➕ Adding new todo:', title);
+  // Event Handlers
 
-    const newTodo: Omit<Todo, 'id'> = {
+  onTodoAdded(title: string): void {
+    if (!title.trim()) return;
+
+    const userName = localStorage.getItem('user') as string;
+    const newTodo: Todo = {
       title: title.trim(),
       completed: false,
-      createdAt: new Date()
+      createdAt: new Date(),
+      createdBy: userName,
     };
 
-    const subscription = this.todoService.createTodo(newTodo).subscribe({
-      next: (createdTodo) => {
-        // Add to local state
-        this._todos.update(current => [...current, createdTodo]);
-        console.log('✅ Todo added successfully');
-      },
+    console.log(newTodo);
+    this.todoService.createTodo(newTodo).subscribe({
+      next: (response) => {
+        this._todos.update(current => [...current, response]);
+        this.loadTodos();
+        this.updateCounts();
+      }, 
       error: (error) => {
-        console.error('❌ Failed to add todo:', error);
-        this._error.set('Failed to add todo. Please try again.');
+        console.error('❌ Failed to create todo:', error);
+        this._error.set('Failed to create todo. Please try again.');
       }
     });
-
-    this.subscriptions.add(subscription);
   }
 
-  toggleTodo(id: number): void {
-    const todo = this._todos().find(t => t.id === id);
-    if (!todo) {
-      console.warn('⚠️ Todo not found:', id);
-      return;
-    }
+  onToggleTodo(id: number): void {
+    const todo = this.todos().find(t => t.id === id);
+    if (!todo) return;
 
-    console.log('🔄 Toggling todo:', id, !todo.completed);
-
-    const subscription = this.todoService.toggleTodo(id, !todo.completed).subscribe({
-      next: (updatedTodo) => {
+    this.todoService.toggleTodo(id, !todo.completed).subscribe({
+      next: (updateTodo) => {
         // Update local state
+        console.log(updateTodo);
         this._todos.update(current =>
-          current.map(t => t.id === id ? updatedTodo : t)
+          current.map(t => t.id === id ? updateTodo : t)
         );
-        console.log('✅ Todo toggled successfully');
+        this.loadTodos();
+        this.updateCounts();
       },
       error: (error) => {
-        console.error('❌ Failed to toggle todo:', error);
-        this._error.set('Failed to update todo. Please try again.');
+        console.error('Failed to toggle todo:', error);
       }
     });
-
-    this.subscriptions.add(subscription);
   }
 
-  deleteTodo(id: number): void {
-    const todo = this._todos().find(t => t.id === id);
-    if (!todo) {
-      console.warn('⚠️ Todo not found:', id);
+  onDeleteTodo(id: number): void {
+    if (!confirm('Are you sure you want to delete this todo?')) {
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete "${todo.title}"?`)) {
-      return;
-    }
-
-    console.log('🗑️ Deleting todo:', id);
-
-    const subscription = this.todoService.deleteTodo(id).subscribe({
+    this.todoService.deleteTodo(id).subscribe({
       next: () => {
         // Remove from local state
         this._todos.update(current => current.filter(t => t.id !== id));
-        console.log('✅ Todo deleted successfully');
+        this.updateCounts();
       },
       error: (error) => {
-        console.error('❌ Failed to delete todo:', error);
-        this._error.set('Failed to delete todo. Please try again.');
-      }
-    });
-
-    this.subscriptions.add(subscription);
-  }
-
-  clearCompleted(): void {
-    const completedTodos = this._todos().filter(t => t.completed);
-    if (completedTodos.length === 0) {
-      console.warn('⚠️ No completed todos to clear');
-      return;
-    }
-
-    if (!confirm(`Are you sure you want to delete ${completedTodos.length} completed todos?`)) {
-      return;
-    }
-
-    console.log('🧹 Clearing completed todos...');
-
-    // Delete each completed todo
-    completedTodos.forEach(todo => {
-      if (todo.id) {
-        this.deleteTodo(todo.id);
+        console.error('Failed to delete todo:', error);
       }
     });
   }
 
-  // ============================================
-  // Utility Methods
-  // ============================================
-  
-  // Format date for display
+  onClearCompleted(): void {
+    if (!confirm('Are you sure you want to delete all completed todos?')) {
+      return;
+    }
+    
+    this._todos.update(current =>
+      current.filter(todo => !todo.completed)
+    );
+  }
+
+  onClearAll(): void {
+    if (confirm('Are you sure you want to clear all todos?')) {
+      this._todos.set([]);
+      this._nextId = 1;
+    }
+  }
+
+  onRefresh(): void {
+    this.loadTodos();
+  }
+
+  private updateCounts(): void {
+    const todos = this.todos();
+    const completed = todos.filter(t => t.completed).length;
+    const pending = todos.filter(t => !t.completed).length;
+
+    this.completedCount.set(completed);
+    this.pendingCount.set(pending);
+  }
+
+  getStatusText(): string {
+    if (this.isLoading()) return 'Loading...';
+    if (this.error()) return 'Error occurred';
+    if (this.totalTodos() === 0) return 'No todos';
+    return `${this.completedTodos()}/${this.totalTodos()} completed`;
+  }
+
+  canPerformActions(): boolean {
+    // TODO: สร้าง helper method ตรวจสอบว่าสามารถทำ actions ได้หรือไม่
+    return !this.isLoading() && !this.error();
+  }
+
+  // TODO: สร้าง method สำหรับ format date
   formatDate(date: Date): string {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
@@ -275,21 +249,6 @@ export class TodoAppComponent implements OnInit, OnDestroy {
     return date.toLocaleDateString();
   }
 
-  // Check if actions can be performed
-  canPerformActions(): boolean {
-    return !this.isLoading() && !this.error();
-  }
-
-  // Clear error state
-  clearError(): void {
-    this._error.set(null);
-    this.todoService.clearError();
-  }
-
-  // Track function for ngFor (จะใช้ใน template)
-  trackByTodoId(index: number, todo: Todo): number {
-    return todo.id || index;
-  }
 }
 ```
 
@@ -298,178 +257,114 @@ export class TodoAppComponent implements OnInit, OnDestroy {
 ```html
 <div class="min-h-screen bg-gray-50 py-8">
   <div class="max-w-md mx-auto">
-    
     <!-- Header -->
     <div class="text-center mb-8">
       <h1 class="text-3xl font-bold text-gray-800 mb-2">
         📝 Todo App
       </h1>
-      <p class="text-gray-600">Angular 18 + Signals + Tailwind</p>
+      <p class="text-gray-600">Angular 18 + Components + Signals</p>
     </div>
 
-    <!-- Add Todo Section -->
-    <div class="mb-6">
-      <div class="bg-white rounded-lg shadow-md p-4">
-        <div class="flex gap-2">
-          <input 
-            #todoInput
-            type="text" 
-            placeholder="Add a new todo..."
-            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            (keyup.enter)="addTodo(todoInput.value); todoInput.value = ''"
-            [disabled]="!canPerformActions()"
-          >
-          <button 
-            (click)="addTodo(todoInput.value); todoInput.value = ''"
-            [disabled]="!canPerformActions()"
-            class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Add
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Add Todo Form -->
+    <app-todo-form 
+      (todoAdded)="onTodoAdded($event)"
+      class="mb-6 block">
+    </app-todo-form>
 
     <!-- Statistics -->
     <div class="bg-white rounded-lg shadow-md p-4 mb-6">
-      <div class="mb-4">
-        <div class="flex justify-between items-center mb-2">
-          <span class="text-sm font-medium text-gray-700">Progress</span>
-          <span class="text-sm text-gray-500">{{ progressPercentage() }}%</span>
-        </div>
-        <div class="w-full bg-gray-200 rounded-full h-2">
-          <div 
-            class="bg-blue-500 h-2 rounded-full transition-all duration-300"
-            [style.width.%]="progressPercentage()"
-          ></div>
-        </div>
-      </div>
-      
       <div class="grid grid-cols-3 gap-4 text-center">
         <div>
-          <div class="text-xl font-bold text-blue-600">{{ totalTodos() }}</div>
+          <div class="text-xl font-bold text-blue-600">
+            {{ totalTodos() }}
+          </div>
           <div class="text-xs text-gray-600">Total</div>
         </div>
         <div>
-          <div class="text-xl font-bold text-green-600">{{ completedTodos() }}</div>
+          <div class="text-xl font-bold text-green-600">
+            {{ completedTodos() }}
+          </div>
           <div class="text-xs text-gray-600">Completed</div>
         </div>
         <div>
-          <div class="text-xl font-bold text-orange-600">{{ pendingTodos() }}</div>
+          <div class="text-xl font-bold text-orange-600">
+            {{ pendingTodos() }}
+          </div>
           <div class="text-xs text-gray-600">Pending</div>
         </div>
       </div>
     </div>
 
-    <!-- Status Bar -->
-    <div class="mb-4 flex justify-between items-center">
-      <span class="text-sm text-gray-600">{{ statusText() }}</span>
-      <div class="flex gap-2">
-        @if (completedTodos() > 0) {
-          <button 
-            (click)="clearCompleted()"
-            [disabled]="!canPerformActions()"
-            class="text-xs px-3 py-1 text-red-600 border border-red-300 rounded hover:bg-red-50 disabled:opacity-50"
-          >
-            Clear Completed
-          </button>
-        }
-        <button 
-          (click)="refreshTodos()"
-          [disabled]="!canPerformActions()"
-          class="text-xs px-3 py-1 text-blue-600 border border-blue-300 rounded hover:bg-blue-50 disabled:opacity-50"
-        >
-          🔄 Refresh
-        </button>
-      </div>
-    </div>
-
-    <!-- Error Message -->
-    @if (error()) {
-      <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-        <div class="flex justify-between items-start">
-          <div class="text-red-700">
-            <strong>Error:</strong> {{ error() }}
-          </div>
-          <button 
-            (click)="clearError()"
-            class="text-red-500 hover:text-red-700"
-          >
-            ✕
-          </button>
-        </div>
-      </div>
-    }
-
-    <!-- Loading State -->
-    @if (isLoading()) {
-      <div class="bg-white rounded-lg shadow-md p-8 text-center">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-        <p class="text-gray-600">Loading todos...</p>
-      </div>
-    }
-
     <!-- Todo List -->
-    @else {
-      <div class="space-y-3">
-        @if (todos().length === 0 && !error()) {
-          <!-- Empty State -->
-          <div class="bg-white rounded-lg shadow-md p-8 text-center">
-            <div class="text-4xl mb-3">📝</div>
-            <h3 class="text-lg font-semibold text-gray-700 mb-2">No todos yet!</h3>
-            <p class="text-gray-500">Add your first todo to get started.</p>
-          </div>
-        } @else {
-          <!-- Todo Items -->
-          @for (todo of todos(); track trackByTodoId($index, todo)) {
-            <div class="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow">
-              <div class="flex items-center gap-3">
-                <!-- Checkbox -->
-                <button 
-                  (click)="toggleTodo(todo.id!)"
-                  [disabled]="!canPerformActions()"
-                  class="flex-shrink-0 w-6 h-6 rounded-full border-2 transition-all disabled:opacity-50"
-                  [class.bg-green-500]="todo.completed"
-                  [class.border-green-500]="todo.completed"
-                  [class.border-gray-300]="!todo.completed"
-                  [class.hover:border-green-400]="!todo.completed && canPerformActions()"
+    <div class="space-y-3">
+      @if (todos().length === 0) {
+        <!-- Empty State -->
+        <div class="bg-white rounded-lg shadow-md p-8 text-center">
+          <div class="text-4xl mb-3">📝</div>
+          <h3 class="text-lg font-semibold text-gray-700 mb-2">
+            No todos yet!
+          </h3>
+          <p class="text-gray-500">
+            Add your first todo above
+          </p>
+        </div>
+      } @else {
+        <!-- Todo Items -->
+        @for (todo of todos(); track todo.id) {
+          <div class="bg-white rounded-lg shadow-md p-4 transition-all duration-200 hover:shadow-lg">
+            <div class="flex items-center justify-between">
+              <!-- Left Side: Checkbox + Title -->
+              <div class="flex items-center space-x-3 flex-1">
+                <!-- Custom Checkbox -->
+                <button
+                  class="w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  [ngClass]="todo.completed
+                    ? 'bg-blue-500 border-blue-500'
+                    : 'border-gray-300 hover:border-blue-400'"
+                  (click)="onToggleTodo(todo.id!)"
                 >
                   @if (todo.completed) {
-                    <span class="text-white text-sm">✓</span>
+                    <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clip-rule="evenodd">
+                      </path>
+                    </svg>
                   }
                 </button>
 
-                <!-- Todo Content -->
-                <div class="flex-1 min-w-0">
-                  <div 
-                    class="transition-all"
-                    [class.line-through]="todo.completed"
-                    [class.text-gray-500]="todo.completed"
-                    [class.text-gray-800]="!todo.completed"
-                  >
-                    {{ todo.title }}
-                  </div>
-                  <div class="text-xs text-gray-400 mt-1">
-                    {{ formatDate(todo.createdAt) }}
-                  </div>
+                <!-- Title -->
+                <span
+                  class="flex-1 transition-all duration-200"
+                  [class.line-through]="todo.completed"
+                  [class.text-gray-500]="todo.completed"
+                  [class.text-gray-900]="!todo.completed">
+                  {{ todo.title }}
+                </span>
+
+                <div class="text-xs text-gray-400 mr-2">
+                  {{ todo.createdAt | date:'shortDate' }}
                 </div>
-
-                <!-- Delete Button -->
-                <button 
-                  (click)="deleteTodo(todo.id!)"
-                  [disabled]="!canPerformActions()"
-                  class="flex-shrink-0 text-red-500 hover:text-red-700 disabled:opacity-50 p-1"
-                  title="Delete todo"
-                >
-                  🗑️
-                </button>
               </div>
-            </div>
-          }
-        }
-      </div>
-    }
 
+              <!-- Right Side: Delete Button -->
+              <button
+                title="Delete todo"
+                class="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg
+                  transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500"
+                (click)="onDeleteTodo(todo.id!)"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        }
+      }
+    </div>
+    
   </div>
 </div>
 ```

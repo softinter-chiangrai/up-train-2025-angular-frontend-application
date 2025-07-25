@@ -3,14 +3,7 @@ export interface Todo {
   title: string;
   completed: boolean;
   createdAt: Date;
+  createdBy: string;
 }
 
-export interface TodoFormData {
-  title: string;
-}
-
-export interface UpdateTodoRequest {
-  title?: string;
-  completed?: boolean;
-}
 

@@ -34,6 +34,12 @@ export class TodoAppComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadTodos();
+    // generate local storage
+    if (!localStorage.getItem('user')) {
+      // Generate a v4 UUID and store as 'user'
+      const uuid = crypto.randomUUID();
+      localStorage.setItem('user', uuid);
+    }
   }
 
   ngOnDestroy(): void {
@@ -84,12 +90,15 @@ export class TodoAppComponent implements OnInit, OnDestroy {
   onTodoAdded(title: string): void {
     if (!title.trim()) return;
 
+    const userName = localStorage.getItem('user') as string;
     const newTodo: Todo = {
       title: title.trim(),
       completed: false,
-      createdAt: new Date()
+      createdAt: new Date(),
+      createdBy: userName,
     };
 
+    console.log(newTodo);
     this.todoService.createTodo(newTodo).subscribe({
       next: (response) => {
         this._todos.update(current => [...current, response]);

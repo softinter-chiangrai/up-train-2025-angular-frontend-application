@@ -23,8 +23,8 @@ mkdir src/app/components/todo-form
 #### `src/app/components/todo-form/todo-form.component.ts`
 
 ```typescript
-import { Component, EventEmitter, Output, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Component, EventEmitter, Output, inject, signal } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 
 @Component({
@@ -35,194 +35,35 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
   styleUrl: './todo-form.component.css'
 })
 export class TodoFormComponent {
-  
-  // ============================================
-  // Dependency Injection
-  // ============================================
-  private readonly formBuilder = inject(FormBuilder);
-
-  // ============================================
-  // Outputs (Events)
-  // ============================================
   @Output() todoAdded = new EventEmitter<string>();
 
-  // ============================================
-  // Signals
-  // ============================================
-  private _isSubmitting = signal<boolean>(false);
-  private _submitAttempted = signal<boolean>(false);
+  todoForm: FormGroup;
+  isSubmitting = false;
 
-  // Public readonly signals
-  isSubmitting = this._isSubmitting.asReadonly();
-  submitAttempted = this._submitAttempted.asReadonly();
-
-  // ============================================
-  // Form Configuration
-  // ============================================
-  todoForm: FormGroup = this.formBuilder.group({
-    title: ['', [
-      Validators.required,
-      Validators.minLength(1),
-      Validators.maxLength(100),
-      this.noWhitespaceValidator
-    ]]
-  });
-
-  // ============================================
-  // Custom Validators
-  // ============================================
-  
-  // Validator สำหรับตรวจสอบว่าไม่ใช่ whitespace อย่างเดียว
-  private noWhitespaceValidator(control: any) {
-    const value = control.value;
-    if (value && typeof value === 'string' && value.trim().length === 0) {
-      return { whitespace: true };
-    }
-    return null;
-  }
-
-  // ============================================
-  // Form Submission
-  // ============================================
-  onSubmit(): void {
-    this._submitAttempted.set(true);
-
-    if (this.todoForm.invalid) {
-      console.warn('⚠️ Form is invalid');
-      this.markAllFieldsAsTouched();
-      return;
-    }
-
-    const title = this.todoForm.get('title')?.value?.trim();
-    
-    if (!title) {
-      console.warn('⚠️ Title is empty after trim');
-      return;
-    }
-
-    console.log('📝 Submitting todo:', title);
-    this._isSubmitting.set(true);
-
-    // Simulate submission delay
-    setTimeout(() => {
-      try {
-        // Emit the todo to parent component
-        this.todoAdded.emit(title);
-        
-        // Reset form after successful submission
-        this.resetForm();
-        
-        console.log('✅ Todo submitted successfully');
-      } catch (error) {
-        console.error('❌ Error submitting todo:', error);
-      } finally {
-        this._isSubmitting.set(false);
-      }
-    }, 300); // Small delay for UX
-  }
-
-  // ============================================
-  // Form Management
-  // ============================================
-  
-  resetForm(): void {
-    this.todoForm.reset();
-    this._submitAttempted.set(false);
-    console.log('🔄 Form reset');
-  }
-
-  private markAllFieldsAsTouched(): void {
-    Object.keys(this.todoForm.controls).forEach(key => {
-      this.todoForm.get(key)?.markAsTouched();
+  constructor(private fb: FormBuilder) {
+    this.todoForm = this.fb.group({
+      title: ['', [Validators.required, Validators.maxLength(50)]]
     });
   }
 
-  // ============================================
-  // Validation Helpers
-  // ============================================
-  
+  onSubmit() {
+    if (this.todoForm.valid) {
+      this.isSubmitting = true;
+
+      const title = this.todoForm.get('title')?.value;
+
+      // Simulate loading delay
+      setTimeout(() => {
+        this.todoAdded.emit(title);
+        this.todoForm.reset();
+        this.isSubmitting = false;
+      }, 500);
+    }
+  }
+
   isFieldInvalid(fieldName: string): boolean {
     const field = this.todoForm.get(fieldName);
-    return !!(field && field.invalid && (field.dirty || field.touched || this.submitAttempted()));
-  }
-
-  getFieldError(fieldName: string): string | null {
-    const field = this.todoForm.get(fieldName);
-    
-    if (!field || !this.isFieldInvalid(fieldName)) {
-      return null;
-    }
-
-    const errors = field.errors;
-    if (!errors) return null;
-
-    // Return user-friendly error messages
-    if (errors['required']) {
-      return 'Todo title is required';
-    }
-    
-    if (errors['minlength']) {
-      return 'Todo title must be at least 1 character';
-    }
-    
-    if (errors['maxlength']) {
-      const maxLength = errors['maxlength'].requiredLength;
-      return `Todo title cannot exceed ${maxLength} characters`;
-    }
-    
-    if (errors['whitespace']) {
-      return 'Todo title cannot be only whitespace';
-    }
-
-    return 'Invalid input';
-  }
-
-  // ============================================
-  // UI State Helpers
-  // ============================================
-  
-  getFieldClass(fieldName: string): string {
-    const baseClass = 'w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-colors';
-    
-    if (this.isFieldInvalid(fieldName)) {
-      return `${baseClass} border-red-300 focus:ring-red-500 focus:border-red-500`;
-    }
-    
-    return `${baseClass} border-gray-300 focus:ring-blue-500 focus:border-blue-500`;
-  }
-
-  getSubmitButtonClass(): string {
-    const baseClass = 'px-6 py-3 rounded-lg font-medium transition-all duration-200';
-    
-    if (this.isSubmitting()) {
-      return `${baseClass} bg-gray-400 text-white cursor-not-allowed`;
-    }
-    
-    if (this.todoForm.valid) {
-      return `${baseClass} bg-blue-500 text-white hover:bg-blue-600 hover:shadow-lg`;
-    }
-    
-    return `${baseClass} bg-gray-300 text-gray-500 cursor-not-allowed`;
-  }
-
-  // ============================================
-  // Character Count Helper
-  // ============================================
-  
-  getCurrentLength(): number {
-    return this.todoForm.get('title')?.value?.length || 0;
-  }
-
-  getMaxLength(): number {
-    return 100; // จาก Validators.maxLength(100)
-  }
-
-  getRemainingCharacters(): number {
-    return this.getMaxLength() - this.getCurrentLength();
-  }
-
-  isNearMaxLength(): boolean {
-    return this.getRemainingCharacters() <= 10;
+    return field ? field.invalid && (field.dirty || field.touched) : false;
   }
 }
 ```
@@ -231,119 +72,61 @@ export class TodoFormComponent {
 
 ```html
 <div class="bg-white rounded-lg shadow-md p-6">
+  <h2 class="text-lg font-semibold text-gray-800 mb-4">
+    ➕ Add New Todo
+  </h2>
   
-  <!-- Form Header -->
-  <div class="mb-4">
-    <h2 class="text-lg font-semibold text-gray-800 mb-1">Add New Todo</h2>
-    <p class="text-sm text-gray-600">What would you like to accomplish today?</p>
-  </div>
-
-  <!-- Form -->
-  <form [formGroup]="todoForm" (ngSubmit)="onSubmit()" novalidate>
-    
+  <form [formGroup]="todoForm" (ngSubmit)="onSubmit()">
     <!-- Title Input -->
     <div class="mb-4">
       <label for="title" class="block text-sm font-medium text-gray-700 mb-2">
-        Todo Title
+        Todo Title <span class="text-red-500">*</span>
       </label>
+      <input
+        id="title"
+        type="text"
+        formControlName="title"
+        placeholder="Enter todo title..."
+        class="w-full px-3 py-2 border border-gray-300 rounded-md
+                focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                transition-all duration-200"
+        [class.border-red-500]="isFieldInvalid('title')"
+      />
       
-      <div class="relative">
-        <input
-          id="title"
-          type="text"
-          formControlName="title"
-          placeholder="Enter your todo here..."
-          [class]="getFieldClass('title')"
-          [disabled]="isSubmitting()"
-          autocomplete="off"
-        >
-        
-        <!-- Loading spinner inside input -->
-        @if (isSubmitting()) {
-          <div class="absolute right-3 top-1/2 transform -translate-y-1/2">
-            <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-          </div>
-        }
-      </div>
-
-      <!-- Character Counter -->
-      <div class="flex justify-between items-center mt-1">
-        <!-- Error Message -->
-        <div class="min-h-[1.25rem]">
-          @if (getFieldError('title')) {
-            <p class="text-sm text-red-600 flex items-center">
-              <span class="mr-1">⚠️</span>
-              {{ getFieldError('title') }}
-            </p>
+      <!-- Error Messages -->
+      @if (isFieldInvalid('title')) {
+        <div class="mt-1 text-sm text-red-600">
+          @if (todoForm.get('title')?.errors?.['required']) {
+            <p>Title is required</p>
+          }
+          @if (todoForm.get('title')?.errors?.['maxlength']) {
+            <p>Title must be less than 50 characters</p>
           }
         </div>
-        
-        <!-- Character Count -->
-        <div class="text-xs text-gray-500">
-          <span [class.text-red-500]="isNearMaxLength()">
-            {{ getCurrentLength() }}
-          </span>
-          / {{ getMaxLength() }}
-        </div>
-      </div>
+      }
     </div>
 
-    <!-- Form Actions -->
-    <div class="flex gap-3">
-      
-      <!-- Submit Button -->
-      <button
-        type="submit"
-        [class]="getSubmitButtonClass()"
-        [disabled]="isSubmitting() || !todoForm.valid"
-      >
-        @if (isSubmitting()) {
-          <span class="flex items-center">
-            <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-            Adding...
-          </span>
-        } @else {
-          <span class="flex items-center">
-            <span class="mr-2">➕</span>
-            Add Todo
-          </span>
-        }
-      </button>
-
-      <!-- Reset Button -->
-      <button
-        type="button"
-        (click)="resetForm()"
-        [disabled]="isSubmitting() || todoForm.pristine"
-        class="px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
-        Reset
-      </button>
-    </div>
-
-    <!-- Form Debug Info (เฉพาะ development) -->
-    <!-- Uncomment for debugging -->
-    <!--
-    <div class="mt-4 p-3 bg-gray-100 rounded text-xs">
-      <strong>Debug Info:</strong><br>
-      Form Valid: {{ todoForm.valid }}<br>
-      Form Value: {{ todoForm.value | json }}<br>
-      Form Errors: {{ todoForm.errors | json }}<br>
-      Title Errors: {{ todoForm.get('title')?.errors | json }}
-    </div>
-    -->
+    <!-- Submit Button -->
+    <button
+      type="submit"
+      [disabled]="todoForm.invalid || isSubmitting"
+      class="w-full px-4 py-2 bg-blue-600 text-white rounded-md font-medium
+              hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed
+              transition-colors duration-200
+              focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+      @if (isSubmitting) {
+        <span class="flex items-center justify-center">
+          <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Adding...
+        </span>
+      } @else {
+        Add Todo
+      }
+    </button>
   </form>
-
-  <!-- Form Tips -->
-  <div class="mt-4 p-3 bg-blue-50 rounded-lg">
-    <h4 class="text-sm font-medium text-blue-800 mb-1">💡 Tips:</h4>
-    <ul class="text-xs text-blue-700 space-y-1">
-      <li>• Press Enter to quickly add a todo</li>
-      <li>• Keep titles between 1-100 characters</li>
-      <li>• Be specific for better productivity</li>
-    </ul>
-  </div>
-
 </div>
 ```
 
@@ -572,8 +355,6 @@ describe('TodoFormComponent', () => {
 - [ ] Validation ทำงานได้
 - [ ] Error messages แสดงได้
 - [ ] Form submission ทำงานได้
-- [ ] Character counter ทำงานได้
-- [ ] Loading states ทำงานได้
 - [ ] Integration กับ TodoAppComponent สำเร็จ
 
 ## 🔧 การทดสอบ
