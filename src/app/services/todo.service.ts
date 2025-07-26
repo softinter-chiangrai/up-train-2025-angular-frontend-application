@@ -7,7 +7,8 @@ import { Todo } from '../models/todo.model';
   providedIn: 'root'
 })
 export class TodoService {
-  private readonly apiUrl = 'http://localhost:8000'; // JSON Server หรือ Backend API URL
+  private readonly apiUrl = 'https://plug2dream.com/train/api/v1'; // JSON Server หรือ Backend API URL
+  // https://plug2dream.com/train/api/v1
 
   constructor(private http: HttpClient) {}
 
